@@ -144,19 +144,29 @@ class KitronikServoBoard:
 
 def parse_command(command):
     g = -1
-    x = -1
+    i = -1
+    j = -1
+    k = -1
+    out = "G0"
 
-    out = command[:-2].split(" ")
+    if command != "\r\n":
+        out = command[:-2].split(" ")
+
+    print(out)
 
     for e in out:
         pre = e[0]
         val = e[1:]
         if pre == 'G':
             g = val
-        if pre == 'X':
-            x = val
+        if pre == 'I':
+            i = val
+        if pre == 'J':
+            j = val
+        if pre == 'K':
+            k = val
 
-    return g, x
+    return g, i, j, k
 
 def collect_command():
     command = b''
@@ -171,30 +181,52 @@ def collect_command():
         uart.write(bytes(c))
 
         if c == b"\r\n":
+            if command == b"\r\n":
+                command = b"G1\r\n"
             return command
 
 
 uart.init(baudrate=115200)
 
-uart.write("robot")
+uart.write("robot>")
 
 while not uart.any():
   pass
 
 theServoBoard = KitronikServoBoard
 
+theServoBoard.servo_write(theServoBoard,
+                          KitronikServoBoard.Servos.SERVO_1,
+                          90)
+theServoBoard.servo_write(theServoBoard,
+                          KitronikServoBoard.Servos.SERVO_2,
+                          90)
+theServoBoard.servo_write(theServoBoard,
+                          KitronikServoBoard.Servos.SERVO_3,
+                          90)
+
 while True:
     command = collect_command()
     command_str = str(command, 'UTF-8')
 
-    g, x = parse_command(command_str)
+    g, i, j, k = parse_command(command_str)
 
-    uart.write(bytes("["+command_str+"]", "utf8"))
+    # uart.write(bytes("["+command_str+"]robot>", "utf8"))
+    uart.write(bytes("robot>", "utf8"))
 
     if command == b"\r\n":
         uart.write(bytes("stop", "utf8"))
         break
 
-    theServoBoard.servo_write(theServoBoard,
-                              KitronikServoBoard.Servos.SERVO_1,
-                              int(x))
+    if i != -1:
+        theServoBoard.servo_write(theServoBoard,
+                                KitronikServoBoard.Servos.SERVO_1,
+                                int(i))
+    if j != -1:
+        theServoBoard.servo_write(theServoBoard,
+                                KitronikServoBoard.Servos.SERVO_2,
+                                int(j))
+    if k != -1:
+        theServoBoard.servo_write(theServoBoard,
+                                KitronikServoBoard.Servos.SERVO_3,
+                                int(k))
