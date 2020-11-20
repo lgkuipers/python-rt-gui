@@ -124,13 +124,10 @@ class KitronikServoBoard:
             self._secret_incantation(self)
         buf = bytearray(2)
         HighByte = False
-        PWMVal = degrees + 180
-        #deg100 = degrees * 100
-        #PWMVal100 = deg100 * self.SERVO_MULTIPLIER
-        #PWMVal = PWMVal100 / 10000
-        #PWMVal = PWMVal + self.SERVO_ZERO_OFFSET
-        #print(self.SERVO_ZERO_OFFSET)
-        #print(PWMVal)
+        deg100 = degrees * 100
+        PWMVal100 = deg100 * self.SERVO_MULTIPLIER
+        PWMVal = PWMVal100 / 10000
+        PWMVal = PWMVal + self.SERVO_ZERO_OFFSET
         if (PWMVal > 0xFF):
             HighByte = True
         buf[0] = Servo
@@ -147,29 +144,19 @@ class KitronikServoBoard:
 
 def parse_command(command):
     g = -1
-    i = -1
-    j = -1
-    k = -1
-    out = "G0"
+    x = -1
 
-    if command != "\r\n":
-        out = command[:-2].split(" ")
-
-    print(out)
+    out = command[:-2].split(" ")
 
     for e in out:
         pre = e[0]
         val = e[1:]
         if pre == 'G':
             g = val
-        if pre == 'I':
-            i = val
-        if pre == 'J':
-            j = val
-        if pre == 'K':
-            k = val
+        if pre == 'X':
+            x = val
 
-    return g, i, j, k
+    return g, x
 
 def collect_command():
     command = b''
@@ -183,56 +170,50 @@ def collect_command():
 
         uart.write(bytes(c))
 
-        command_str = str(command, 'UTF-8')
-
-        if command_str.startswith("\r\n"):
-            command = b"G1\r\n"
+        if c == b"\r\n":
             return command
 
-        if command_str.endswith("\r\n"):
-            return command
 
 uart.init(baudrate=115200)
 
-uart.write("robot>")
+uart.write("uart")
 
 while not uart.any():
   pass
 
-theServoBoard = KitronikServoBoard
+sleep(400)
 
-theServoBoard.servo_write(theServoBoard,
-                          KitronikServoBoard.Servos.SERVO_1,
-                          25)
-theServoBoard.servo_write(theServoBoard,
-                          KitronikServoBoard.Servos.SERVO_2,
-                          105)
-theServoBoard.servo_write(theServoBoard,
-                          KitronikServoBoard.Servos.SERVO_3,
-                          95)
+while True:
+    while not uart.any():
+        pass
+    msg = uart.read()
+    msg_str = str(msg, 'UTF-8')
+    int_str = "{}".format(msg)
+
+    uart.write(bytes("["+msg_str+","+int_str+"]", "utf8"))
+
+    if msg == b"\r\n":
+        uart.write(bytes("command\n", "utf8"))
+        break
+
+theServoBoard = KitronikServoBoard
 
 while True:
     command = collect_command()
     command_str = str(command, 'UTF-8')
 
-    g, i, j, k = parse_command(command_str)
+    g, x = parse_command(command_str)
 
-    # uart.write(bytes("["+command_str+"]robot>", "utf8"))
-    uart.write(bytes("robot>", "utf8"))
+
+    print(type(x))
+    print("("+"{}".format(x)+")")
+
+    uart.write(bytes("["+command_str+"]", "utf8"))
 
     if command == b"\r\n":
         uart.write(bytes("stop", "utf8"))
         break
 
-    if i != -1:
-        theServoBoard.servo_write(theServoBoard,
-                                KitronikServoBoard.Servos.SERVO_1,
-                                int(i))
-    if j != -1:
-        theServoBoard.servo_write(theServoBoard,
-                                KitronikServoBoard.Servos.SERVO_2,
-                                int(j))
-    if k != -1:
-        theServoBoard.servo_write(theServoBoard,
-                                KitronikServoBoard.Servos.SERVO_3,
-                                int(k))
+    theServoBoard.servo_write(theServoBoard,
+                              KitronikServoBoard.Servos.SERVO_1,
+                              int(x))

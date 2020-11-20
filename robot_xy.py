@@ -1,19 +1,10 @@
 from microbit import i2c
 # the following imports are for the example code at the end of the file
 from microbit import *
+from math import pow, acos, degrees, sqrt, atan
 
 
 class KitronikServoBoard:
-    #
-    # This class is used to drive the Kitronik 16 Servo add on for microbit
-    # www.kitronik.co.uk/5612
-
-    # Some useful parameters
-
-    # In the future there may be several 16 Servo boards
-    # all controlled from a single micro:bit
-    # In that case extend the functions to include more board addresses
-    # or pass an address in a constructor for the object to know.
     BOARD_1 = 0x6A
 
     # the prescale register address
@@ -43,18 +34,6 @@ class KitronikServoBoard:
         SERVO_2 = 0x0C
         SERVO_3 = 0x10
         SERVO_4 = 0x14
-        SERVO_5 = 0x18
-        SERVO_6 = 0x1C
-        SERVO_7 = 0x20
-        SERVO_8 = 0x24
-        SERVO_9 = 0x28
-        SERVO_10 = 0x2C
-        SERVO_11 = 0x30
-        SERVO_12 = 0x34
-        SERVO_13 = 0x38
-        SERVO_14 = 0x3C
-        SERVO_15 = 0x40
-        SERVO_16 = 0x44
 
     # Trim the servo pulses. These are here for advanced users,
     # It appears that servos I've tested are actually expecting
@@ -150,6 +129,8 @@ def parse_command(command):
     i = -1
     j = -1
     k = -1
+    xl = -1
+    yl = -1
     out = "G0"
 
     if command != "\r\n":
@@ -168,8 +149,12 @@ def parse_command(command):
             j = val
         if pre == 'K':
             k = val
+        if pre == 'X':
+            xl = val
+        if pre == 'Y':
+            yl = val
 
-    return g, i, j, k
+    return g, i, j, k, xl,yl
 
 def collect_command():
     command = b''
@@ -192,6 +177,32 @@ def collect_command():
         if command_str.endswith("\r\n"):
             return command
 
+def xy2alphabeta(x0, y0):
+
+    l=80.0
+    m=80.0
+    z=sqrt(pow(x0,2) + pow(y0,2))
+
+    abc = degrees(acos((-pow(l,2) + pow(m,2) + pow(z,2))/(2*m*z)))
+    bac = degrees(acos((-pow(m,2) + pow(l,2) + pow(z,2))/(2*l*z)))
+    bad = degrees(atan(y0/x0))
+    acb = 180.0 - abc - bac
+
+    beta0 = 180.0 - bac - bad
+    alpha0 = 180.0 - bac - bad - acb
+
+    return alpha0, beta0
+
+def alphabeta2JK(alpha1, beta1):
+#    k_float = - 4.64 * alpha1 + 438
+#    j_float = 4.05 * beta1 - 321.2
+    k_float = - 1.7 * alpha1 + 218.35
+    j_float = 1.48 * beta1 - 50.476
+    j1 = int(j_float)
+    k1 = int(k_float)
+    return j1, k1
+
+
 uart.init(baudrate=115200)
 
 uart.write("robot>")
@@ -211,18 +222,31 @@ theServoBoard.servo_write(theServoBoard,
                           KitronikServoBoard.Servos.SERVO_3,
                           95)
 
+x_glob = 40
+y_glob = 0
+
 while True:
     command = collect_command()
     command_str = str(command, 'UTF-8')
 
-    g, i, j, k = parse_command(command_str)
+    g, i, j, k, x, y = parse_command(command_str)
 
     # uart.write(bytes("["+command_str+"]robot>", "utf8"))
     uart.write(bytes("robot>", "utf8"))
 
-    if command == b"\r\n":
+    if command == b".\r\n":
         uart.write(bytes("stop", "utf8"))
         break
+
+    if (x != -1) or (y != -1):
+        if x != -1:
+            x_glob = x
+        if y != -1:
+            y_glob = y
+
+        alpha, beta = xy2alphabeta(float(x_glob), float(y_glob))
+        i = -1
+        j, k = alphabeta2JK(alpha, beta )
 
     if i != -1:
         theServoBoard.servo_write(theServoBoard,
